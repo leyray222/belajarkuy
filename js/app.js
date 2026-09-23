@@ -1227,6 +1227,101 @@
     });
   }
 
+  /* ---------- Lapor Bug / Saran ---------- */
+  let reportType = "Bug";
+  function reportMeta() {
+    const counts = [
+      "Materi: " + (state.title || "—"),
+      "Kata: " + (state.text ? TextUtil.countWords(state.text) : "—"),
+      "Ringkasan: " + (state.summary ? state.summary.length : "—") + " poin",
+      "Kartu: " + (state.cards ? state.cards.length : "—"),
+      "Soal: " + (state.quiz ? state.quiz.length : "—"),
+      "Bank soal: " + bank.qs.length
+    ];
+    let ai = "Lokal";
+    try {
+      const s = AIService.load();
+      if (s && s.provider) ai = s.provider;
+      else if (aiConfigured) ai = "AI Online";
+    } catch (e) {}
+    return [
+      "Versi: belajarkuy 1.0",
+      "Waktu: " + new Date().toLocaleString("id-ID"),
+      "Halaman: " + (typeof location !== "undefined" ? location.href : "—"),
+      "Browser: " + (navigator.userAgent || "—"),
+      "Mode: " + ai,
+      "Penyimpanan: doc " + ((localStorage.getItem("belajarkuy_doc") || "").length) + " B · stats " + ((localStorage.getItem("belajarkuy_stats") || "").length) + " B"
+    ].concat(counts);
+  }
+  function buildReport() {
+    const msg = $("reportMsg").value.trim();
+    return {
+      app: "belajarkuy",
+      jenis: reportType,
+      pesan: msg,
+      langkah: $("reportSteps").value.trim() || "",
+      kontak: $("reportContact").value.trim() || "",
+      meta: reportMeta()
+    };
+  }
+  function reportText(r) {
+    return "LAPORAN BELAJARKUY\n=================\nJenis: " + r.jenis + "\nPesan: " + r.pesan +
+      (r.langkah ? "\nLangkah: " + r.langkah : "") +
+      (r.kontak ? "\nKontak: " + r.kontak : "") +
+      "\n\nInfo teknis:\n" + r.meta.map(function (m) { return "· " + m; }).join("\n") + "\n";
+  }
+  function uploadReport() {
+    const msg = $("reportMsg").value.trim();
+    if (msg.length < 10) { toast("Tulis dulu apa yang terjadi (min. 10 karakter).", "err"); return false; }
+    const r = buildReport();
+    const title = reportType + ": " + msg.slice(0, 60);
+    const body = reportText(r);
+    const url = "https://github.com/leyray222/belajarkuy/issues/new?title=" +
+      encodeURIComponent(title) + "&body=" + encodeURIComponent(body);
+    if (typeof window !== "undefined" && window.open) window.open(url, "_blank", "noopener");
+    return true;
+  }
+  function initReport() {
+    document.querySelectorAll("#reportType .seg-btn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        document.querySelectorAll("#reportType .seg-btn").forEach(function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        reportType = b.dataset.t;
+      });
+    });
+    $("btnReport").addEventListener("click", function () {
+      $("reportMsg").value = "";
+      $("reportSteps").value = "";
+      $("reportContact").value = "";
+      $("reportToast").hidden = true;
+      $("reportMeta").textContent = reportMeta().join("\n");
+      $("reportModal").hidden = false;
+    });
+    $("btnCloseReport").addEventListener("click", function () { $("reportModal").hidden = true; });
+    $("reportModal").addEventListener("click", function (e) { if (e.target === $("reportModal")) $("reportModal").hidden = true; });
+    $("btnReportIssue").addEventListener("click", function () {
+      if (!uploadReport()) return;
+      $("reportModal").hidden = true;
+      toast("Halaman GitHub Issues dibuka — tinggal klik 'Submit new issue'.", "ok");
+    });
+    $("btnReportCopy").addEventListener("click", function () {
+      const msg = $("reportMsg").value.trim();
+      if (msg.length < 10) { toast("Tulis dulu apa yang terjadi.", "err"); return; }
+      const text = reportText(buildReport());
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { toast("Laporan tersalin — tempel ke mana saja.", "ok"); });
+      } else {
+        toast("Klipbor tidak tersedia di browser ini. Coba 'Unduh .json'.", "err");
+      }
+    });
+    $("btnReportSave").addEventListener("click", function () {
+      const msg = $("reportMsg").value.trim();
+      if (msg.length < 10) { toast("Tulis dulu apa yang terjadi.", "err"); return; }
+      download("laporan-bug-" + Date.now() + ".json", JSON.stringify(buildReport(), null, 2), "application/json");
+      toast("Laporan diunduh.", "ok");
+    });
+  }
+
   /* ---------- Chat ---------- */
   function addChatMsg(role, html) {
     const box = $("chatBox");
@@ -1645,6 +1740,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
     initPrint();
     initAsk();
     initTryout();
+    initReport();
     initBank();
     initPWA();
 

@@ -309,6 +309,7 @@
       <button class="btn btn-line btn-sm" id="btnImport" title="Impor materi .json">Impor ⤒</button>
       <input type="file" id="importInput" accept=".json,application/json" hidden />
       <button class="btn btn-line btn-sm" id="btnNew">＋ Materi baru</button>
+      <button class="btn btn-line btn-sm" id="btnReport" title="Lapor bug atau kasih saran">Lapor Bug</button>
       <button class="icon-btn" id="btnSettings" title="Pengaturan AI"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
     </div>
   </div>
@@ -540,6 +541,50 @@
 </section>
 
 </main>
+
+<!-- REPORT MODAL -->
+<div class="modal" id="reportModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Lapor Bug / Saran</h3>
+      <button class="icon-btn" id="btnCloseReport"><span aria-hidden="true">✕</span></button>
+    </div>
+    <div class="modal-body">
+      <p class="muted">Temukan masalah atau punya ide? Ceritakan di sini. Info teknis dikumpulkan otomatis tanpa menyertakan isi materimu.</p>
+
+      <label class="field"><span>Jenis</span>
+        <div class="seg" id="reportType">
+          <button class="seg-btn active" data-t="Bug">Bug</button>
+          <button class="seg-btn" data-t="Saran">Saran</button>
+          <button class="seg-btn" data-t="Lain-lain">Lain-lain</button>
+        </div>
+      </label>
+
+      <label class="field"><span>Apa yang terjadi?</span>
+        <textarea class="input" id="reportMsg" rows="4" placeholder="Ceritakan masalahnya sejelas mungkin..."></textarea>
+      </label>
+
+      <label class="field"><span>Langkah agar bisa diulang (opsional)</span>
+        <textarea class="input" id="reportSteps" rows="2" placeholder="1. Buka ...  2. Klik ...  3. Muncul ..."></textarea>
+      </label>
+
+      <label class="field"><span>Kontak (opsional, biar bisa kuhubungi)</span>
+        <input class="input" id="reportContact" placeholder="Email / Telegram" autocomplete="off" />
+      </label>
+
+      <details class="faq-item rv"><summary><span class="faq-no">i</span>Info teknis (otomatis)</summary>
+        <p class="muted" id="reportMeta" style="margin-top:6px">—</p>
+      </details>
+
+      <div class="modal-actions">
+        <button class="btn btn-solid" id="btnReportIssue">Kirim ke GitHub Issues ↗</button>
+        <button class="btn btn-line" id="btnReportCopy">Salin laporan</button>
+        <button class="btn btn-line" id="btnReportSave">Unduh .json</button>
+      </div>
+      <div class="toast" id="reportToast" hidden></div>
+    </div>
+  </div>
+</div>
 
 <!-- SETTINGS MODAL -->
 <div class="modal" id="settingsModal" hidden>
