@@ -7,6 +7,9 @@
 
   /* ---------- State ---------- */
   const DOC_KEY = "belajarkuy_doc";
+  const STATS_KEY = "belajarkuy_stats";
+  const RATINGS_KEY = "belajarkuy_ratings";
+  const WEAK_KEY = "belajarkuy_weak";
   const state = {
     title: "",
     text: "",
@@ -17,6 +20,66 @@
   const chatHistory = [];
   let summaryRaw = [];
   let summaryDensity = 8;
+
+  /* ---------- Stats & SRS helpers ---------- */
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function emptyStats() {
+    return { date: todayStr(), sec: 0, rated: 0, correct: 0, attempts: 0 };
+  }
+  function loadStats() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STATS_KEY) || "null");
+      if (s && s.date === todayStr()) return { date: s.date, sec: s.sec || 0, rated: s.rated || 0, correct: s.correct || 0, attempts: s.attempts || 0 };
+    } catch (e) {}
+    return emptyStats();
+  }
+  function saveStats(s) {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+  function getRatings() {
+    try { return JSON.parse(localStorage.getItem(RATINGS_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function saveRatings(r) {
+    try { localStorage.setItem(RATINGS_KEY, JSON.stringify(r || {})); } catch (e) {}
+  }
+  function getWeak() {
+    try { return JSON.parse(localStorage.getItem(WEAK_KEY) || "[]"); } catch (e) { return []; }
+  }
+  function saveWeak(w) {
+    try { localStorage.setItem(WEAK_KEY, JSON.stringify(w)); } catch (e) {}
+  }
+  function renderDashStats() {
+    const ratings = getRatings();
+    let mastered = 0, weak = 0;
+    state.cards.forEach(function (c) {
+      const r = ratings[c.q] || 0;
+      if (r >= 2) mastered++;
+      else if (r === 0) weak++;
+    });
+    $("statMastery").textContent = state.cards.length ? Math.round(mastered / state.cards.length * 100) + "%" : "—";
+    $("statWeak").textContent = weak ? weak + " kartu" : "0";
+    updateStudyLabel();
+  }
+  function updateStudyLabel() {
+    const m = Math.floor(loadStats().sec / 60);
+    $("statStudy").textContent = m >= 60 ? Math.floor(m / 60) + "j " + (m % 60) + "m" : m + " mnt";
+  }
+  function renderWeak() {
+    const w = getWeak();
+    const wrap = $("weakWrap");
+    if (!w.length || !state.text) { wrap.hidden = true; return; }
+    $("weakChips").innerHTML = w.map(function (x) {
+      return '<span class="weak-chip">' + escapeHtml(x.q) + "</span>";
+    }).join("");
+    wrap.hidden = false;
+  }
+  function fmtTime(totalSec) {
+    const m = Math.floor(totalSec / 60), s2 = totalSec % 60;
+    return String(m).padStart(2, "0") + ":" + String(s2).padStart(2, "0");
+  }
 
   /* ---------- Toast & loading ---------- */
   let toastTimer = null;
@@ -152,6 +215,7 @@
     summaryRaw = [];
     summaryDensity = 8;
     chatHistory.length = 0;
+    try { localStorage.removeItem(WEAK_KEY); } catch (e) {}
     saveDoc();
   }
 
@@ -394,6 +458,8 @@
     $("statWords").textContent = TextUtil.countWords(state.text).toLocaleString("id-ID") + " kata";
     $("statChars").textContent = state.text.length.toLocaleString("id-ID") + " karakter";
     updateModeBadge();
+    renderDashStats();
+    renderWeak();
 
     renderSummary();
     if (state.cards.length) {
@@ -416,7 +482,9 @@
     }
     c.innerHTML = list.map(function (s, i) {
       const esc = escapeHtml(s);
-      return '<div class="summary-item"><div class="num">' + (i + 1) + "</div><div>" + esc + "</div></div>";
+      const attr = escapeHtml(s);
+      return '<div class="summary-item"><div class="num">' + (i + 1) + '</div><div>' + esc +
+        '<button class="ask-btn" type="button" data-q="' + attr + '">jelaskan ini</button></div></div>';
     }).join("");
   }
 
@@ -434,7 +502,9 @@
   let matched = 0;
 
   function renderCards() {
-    deck = state.cards.slice();
+    const ratings = getRatings();
+    const sortable = state.cards.slice();
+    deck = sortable.sort(function (a, b) { return (ratings[a.q] || 0) - (ratings[b.q] || 0); });
     deckPos = 0;
     matched = 0;
     $("cardQ").textContent = deck.length ? deck[0].q : "—";
@@ -442,6 +512,7 @@
     $("cardCount").textContent = deck.length ? "1 / " + deck.length + " · 0 dihafal" : "0 kartu";
     updateCardBar();
     setCardFlipped(false);
+    renderDashStats();
   }
 
   function currentCard() { return deck[deckPos]; }
@@ -469,11 +540,11 @@
   function rateCard(rate) {
     if (!deck.length) return;
     const c = currentCard();
-    const ratings = JSON.parse(localStorage.getItem("belajarkuy_ratings") || "{}");
+    const ratings = getRatings();
     const key = c.q;
     const prev = ratings[key] || 0;
     if (rate === 2) {
-      ratings[key] = prev + 1;
+      ratings[key] = Math.min(prev + 1, 5);
       if (prev >= 1) { matched++; deck.splice(deckPos, 1); if (deck.length === 0) { finishDeck(); return; } if (deckPos >= deck.length) deckPos = 0; }
     } else if (rate === 1) {
       ratings[key] = Math.max(0, prev - 1);
@@ -484,7 +555,10 @@
       deck.splice(deckPos, 1);
       deck.splice(moveTo, 0, c);
     }
-    localStorage.setItem("belajarkuy_ratings", JSON.stringify(ratings));
+    saveRatings(ratings);
+    const st = loadStats();
+    st.rated++;
+    saveStats(st);
     if (deck.length) {
       const c2 = currentCard();
       $("cardQ").textContent = c2.q;
@@ -492,16 +566,20 @@
       updateCardCount();
     }
     setCardFlipped(false);
+    renderDashStats();
   }
 
   function finishDeck() {
-    deck = state.cards.slice();
+    const ratings = getRatings();
+    const sortable = state.cards.slice();
+    deck = sortable.sort(function (a, b) { return (ratings[a.q] || 0) - (ratings[b.q] || 0); });
     matched = 0;
     deckPos = 0;
     $("cardQ").textContent = deck[0].q;
     $("cardA").textContent = deck[0].a;
     toast("Semua kartu dihafal — deck diulang untuk penguatan.", "ok");
     updateCardCount();
+    renderDashStats();
   }
 
   function updateCardBar() {
@@ -607,6 +685,7 @@
 
   function checkQuiz() {
     let score = 0;
+    const wrong = [];
     state.quiz.forEach(function (q, i) {
       const optsEls = document.querySelectorAll("#qq" + i + " .quiz-opt");
       const picked = Array.from(optsEls).findIndex(function (b) { return b.classList.contains("selected"); });
@@ -618,9 +697,27 @@
         else if (bi === picked) b.classList.add("wrong");
       });
       if (picked === correctIdx) { score++; quizState[i].correct = true; feedback.textContent = "Benar."; feedback.className = "quiz-feedback ok"; }
-      else { feedback.textContent = picked === -1 ? "Tidak dijawab — jawaban benar ditandai hijau." : "Kurang tepat — jawaban benar ditandai hijau."; feedback.className = "quiz-feedback err"; }
+      else {
+        feedback.textContent = picked === -1 ? "Tidak dijawab — jawaban benar ditandai hijau." : "Kurang tepat — jawaban benar ditandai hijau.";
+        feedback.className = "quiz-feedback err";
+        wrong.push(q.q);
+      }
     });
     $("quizScore").textContent = "Skor: " + score + " / " + state.quiz.length;
+    const st = loadStats();
+    st.attempts += state.quiz.length;
+    st.correct += score;
+    saveStats(st);
+    if (wrong.length) {
+      const w = getWeak();
+      wrong.forEach(function (q) {
+        if (!w.some(function (x) { return x.q === q; })) w.push({ q: q });
+      });
+      if (w.length > 8) w.splice(0, w.length - 8);
+      saveWeak(w);
+      renderWeak();
+    }
+    renderDashStats();
     toast("Skor kamu: " + score + "/" + state.quiz.length + (score === state.quiz.length ? " — skor sempurna." : ""));
   }
 
@@ -736,6 +833,7 @@
     });
     chatHistory.length = 0;
     try { localStorage.removeItem(DOC_KEY); } catch (e) {}
+    try { localStorage.removeItem(WEAK_KEY); } catch (e) {}
     $("pasteArea").value = "";
     $("ytInput").value = "";
     $("summaryPrompt").value = "";
@@ -791,6 +889,244 @@
     });
   }
 
+  /* ---------- Export / import ---------- */
+  function download(filename, content, mime) {
+    const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 250);
+  }
+  function slug() {
+    return (state.title || "materi").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "materi";
+  }
+  function csvCell(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
+  function exportDoc(kind) {
+    if (!state.text) { toast("Proses materi dulu ya.", "err"); return; }
+    if (kind === "json") {
+      download("belajarkuy-" + slug() + ".json", JSON.stringify({ app: "belajarkuy", v: 2, title: state.title, text: state.text, summary: displaySummary(), cards: state.cards, quiz: state.quiz }, null, 2), "application/json");
+    } else if (kind === "md") {
+      const lines = ["# " + (state.title || "Materi"), "", "## Ringkasan"];
+      displaySummary().forEach(function (s) { lines.push("- " + s); });
+      lines.push("", "## Flashcard");
+      state.cards.forEach(function (c) { lines.push("- **" + c.q + "** — " + c.a); });
+      lines.push("", "## Kuis (kunci jawaban)");
+      state.quiz.forEach(function (q, i) {
+        const key = q.options.find(function (o) { return o.correct; });
+        lines.push((i + 1) + ". " + q.q + " -> " + (key ? key.text : "?"));
+      });
+      download("belajarkuy-" + slug() + ".md", lines.join("\n"), "text/markdown");
+    } else if (kind === "flash") {
+      const rows = [csvCell("Pertanyaan") + "," + csvCell("Jawaban")];
+      state.cards.forEach(function (c) { rows.push(csvCell(c.q) + "," + csvCell(c.a)); });
+      download("belajarkuy-flashcard-" + slug() + ".csv", "\uFEFF" + rows.join("\r\n"), "text/csv");
+    } else if (kind === "quiz") {
+      const head = ["Type", "Title", "Option 1", "Option 2", "Option 3", "Option 4"];
+      const rows = [head.join(",")];
+      state.quiz.forEach(function (q) {
+        const opts = q.options.map(function (o) { return o.text; });
+        rows.push(["MULTIPLE_CHOICE", q.q].concat(opts.slice(0, 4)).map(csvCell).join(","));
+        const cIdx = q.options.findIndex(function (o) { return o.correct; });
+        if (cIdx >= 0 && cIdx < 4) {
+          const mark = ["MULTIPLE_CHOICE", "", "", "", "", ""];
+          mark[2 + cIdx] = opts[cIdx];
+          rows.push(mark.map(csvCell).join(","));
+        }
+      });
+      download("belajarkuy-kuis-" + slug() + ".csv", "\uFEFF" + rows.join("\r\n"), "text/csv");
+    }
+    toast("File diunduh.", "ok");
+  }
+  function initExportMenu() {
+    const menu = $("exportMenu");
+    $("btnExportMenu").addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+    });
+    document.addEventListener("click", function () { menu.hidden = true; });
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+      const b = e.target.closest(".menu-item");
+      if (!b) return;
+      exportDoc(b.dataset.export);
+      menu.hidden = true;
+    });
+  }
+  function initImport() {
+    $("btnImport").addEventListener("click", function () { $("importInput").click(); });
+    $("importInput").addEventListener("change", function () {
+      const f = this.files && this.files[0];
+      this.value = "";
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = function () {
+        try {
+          const d = JSON.parse(r.result);
+          if (!d || !d.text || d.text.length < 20) throw new Error("file tidak valid.");
+          state.title = d.title || "Impor: " + f.name;
+          state.text = d.text;
+          state.summary = Array.isArray(d.summary) ? d.summary : [];
+          summaryRaw = state.summary.slice();
+          state.cards = Array.isArray(d.cards) ? d.cards : [];
+          state.quiz = Array.isArray(d.quiz) ? d.quiz : [];
+          chatHistory.length = 0;
+          summaryDensity = 8;
+          try { localStorage.removeItem(WEAK_KEY); } catch (e) {}
+          saveDoc();
+          renderByState();
+          showView("apps");
+          if (!state.summary.length || !state.cards.length || !state.quiz.length) processDocument();
+          else renderCards();
+          toast("Materi diimpor.", "ok");
+        } catch (e) {
+          toast("Impor gagal: " + e.message, "err");
+        }
+      };
+      r.readAsText(f);
+    });
+  }
+
+  /* ---------- Bagikan via link ---------- */
+  function initShare() {
+    $("btnShare").addEventListener("click", function () {
+      if (!state.text) { toast("Proses materi dulu ya.", "err"); return; }
+      try {
+        const b = new Blob([state.text], { type: "text/plain" });
+        const fr = new FileReader();
+        fr.onloadend = function () {
+          let b64 = String(fr.result).split(",")[1];
+          b64 = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          const url = location.origin + location.pathname + "#m=" + b64;
+          navigator.clipboard.writeText(url).then(function () {
+            toast("Link materi disalin — kirim ke teman.", "ok");
+          }).catch(function () {
+            toast(url.slice(0, 60) + "... (salin manual)", "err");
+          });
+        };
+        fr.readAsDataURL(b);
+      } catch (e) {
+        toast("Bagikan gagal: " + e.message, "err");
+      }
+    });
+  }
+  function handleSharedHash() {
+    if (typeof location === "undefined") return;
+    const h = location.hash || "";
+    if (h.indexOf("#m=") !== 0) return;
+    try {
+      let b64 = h.slice(3).replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4) b64 += "=";
+      let txt = window.atob ? decodeURIComponent(escape(window.atob(b64))) : b64;
+      if (!txt || txt.length < 20) return;
+      newMaterial("Materi dibagikan", TextUtil.clean(txt));
+      processDocument();
+      showView("apps");
+      history.replaceState(null, "", location.pathname + location.search);
+    } catch (e) {}
+  }
+
+  /* ---------- Pomodoro ---------- */
+  let pomo = { mode: "focus", left: 25 * 60, run: false, iv: null, tick: 0 };
+  function renderPomo() {
+    const el = $("pomoTime");
+    el.textContent = fmtTime(pomo.left);
+    el.className = pomo.mode === "break" ? "pomo-break" : "";
+  }
+  function pomoTick() {
+    if (!pomo.run) return;
+    pomo.left--;
+    if (pomo.mode === "focus") {
+      const st = loadStats();
+      st.sec++;
+      saveStats(st);
+      updateStudyLabel();
+    }
+    if (pomo.left <= 0) {
+      if (pomo.mode === "focus") {
+        pomo.mode = "break";
+        pomo.left = 5 * 60;
+        toast("Sesi fokus 25 menit selesai — istirahat 5 menit.", "ok");
+      } else {
+        pomo.mode = "focus";
+        pomo.left = 25 * 60;
+        toast("Istirahat selesai — lanjut fokus 25 menit.", "ok");
+      }
+    }
+    renderPomo();
+  }
+  function initPomodoro() {
+    $("pomoStart").addEventListener("click", function () {
+      if (!state.text) { toast("Proses materi dulu ya.", "err"); return; }
+      pomo.run = !pomo.run;
+      if (pomo.run) {
+        if (!pomo.iv) pomo.iv = setInterval(pomoTick, 1000);
+        toast("Pomodoro dimulai — fokus 25 menit.");
+      } else {
+        clearInterval(pomo.iv);
+        pomo.iv = null;
+        toast("Timer dijeda.", "ok");
+      }
+    });
+    $("pomoReset").addEventListener("click", function () {
+      clearInterval(pomo.iv);
+      pomo.iv = null;
+      pomo.run = false;
+      pomo.mode = "focus";
+      pomo.left = 25 * 60;
+      renderPomo();
+      toast("Timer direset.");
+    });
+if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("beforeunload", function () {
+        clearInterval(pomo.iv);
+        saveStats(loadStats());
+      });
+    }
+  }
+
+  /* ---------- Cetak flashcard ---------- */
+  function initPrint() {
+    $("btnPrintCards").addEventListener("click", function () {
+      if (!state.cards.length) { toast("Belum ada flashcard.", "err"); return; }
+      const area = $("printArea");
+      area.innerHTML = '<div class="print-head"><strong>' + escapeHtml(state.title || "Flashcard") +
+        "</strong><span>BelajarKuy · by Panji Yusuf</span></div>" +
+        state.cards.map(function (c, i) {
+          return '<div class="print-card"><div class="pc-q"><span class="pc-no">' + (i + 1) +
+            "</span><p>" + escapeHtml(c.q) + '</p></div><div class="pc-a">' + escapeHtml(c.a) + "</div></div>";
+        }).join("");
+      setTimeout(function () { window.print(); }, 80);
+    });
+  }
+
+  /* ---------- Tanya per poin ringkasan / ke tab ---------- */
+  function activateTab(name) {
+    const tab = document.querySelector('.tab[data-tab="' + name + '"]');
+    if (tab) tab.click();
+  }
+  function initAsk() {
+    document.addEventListener("click", function (e) {
+      const b = e.target.closest(".ask-btn");
+      if (b) {
+        $("chatInput").value = b.getAttribute("data-q") || "";
+        activateTab("chat");
+        $("chatInput").focus();
+        return;
+      }
+      const g = e.target.closest(".weak-goto");
+      if (g && g.getAttribute("data-goto") === "flashcards") activateTab("flashcards");
+    });
+  }
+
+  /* ---------- PWA offline ---------- */
+  function initPWA() {
+    if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    }
+  }
+
   /* ---------- Init ---------- */
   function init() {
     initTheme();
@@ -801,6 +1137,13 @@
     initFlashcardUI();
     initDensity();
     initKeyboard();
+    initExportMenu();
+    initImport();
+    initShare();
+    initPomodoro();
+    initPrint();
+    initAsk();
+    initPWA();
 
     document.querySelectorAll("[data-goto]").forEach(function (el) {
       el.addEventListener("click", function (e) {
@@ -860,6 +1203,7 @@ $("btnRegenSummary").addEventListener("click", async function () {
     } else {
       showView("home");
     }
+    handleSharedHash();
   }
 
   document.addEventListener("DOMContentLoaded", init);

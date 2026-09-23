@@ -10,6 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,900;1,9..144,600&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="site.webmanifest" />
+<meta name="theme-color" content="#f3efe6" />
+<meta name="mobile-web-app-capable" content="yes" />
 </head>
 <body>
 
@@ -295,6 +298,16 @@
       <h2>Meja kerjamu</h2>
     </div>
     <div class="app-topbar-actions">
+      <button class="btn btn-line btn-sm" id="btnShare" title="Salin link materi untuk dibagikan">Bagikan ↗</button>
+      <button class="btn btn-line btn-sm" id="btnExportMenu" title="Unduh materi">Unduh ▾</button>
+      <div class="menu" id="exportMenu" hidden>
+        <button class="menu-item" data-export="json">Materi lengkap (.json)</button>
+        <button class="menu-item" data-export="md">Ringkasan (.md)</button>
+        <button class="menu-item" data-export="flash">Flashcard (.csv)</button>
+        <button class="menu-item" data-export="quiz">Kuis (.csv · Google Forms)</button>
+      </div>
+      <button class="btn btn-line btn-sm" id="btnImport" title="Impor materi .json">Impor ⤒</button>
+      <input type="file" id="importInput" accept=".json,application/json" hidden />
       <button class="btn btn-line btn-sm" id="btnNew">＋ Materi baru</button>
       <button class="icon-btn" id="btnSettings" title="Pengaturan AI"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
     </div>
@@ -350,6 +363,28 @@
       </div>
     </div>
 
+    <div class="dash-stats">
+      <div class="dash-stat"><span class="dash-k">KUASAI</span><strong id="statMastery">—</strong></div>
+      <div class="dash-stat"><span class="dash-k">KARTU LEMAH</span><strong id="statWeak">0</strong></div>
+      <div class="dash-stat"><span class="dash-k">BELAJAR HARI INI</span><strong id="statStudy">0 mnt</strong></div>
+      <div class="dash-stat pomo">
+        <span class="dash-k">POMODORO</span>
+        <strong id="pomoTime">25:00</strong>
+        <div class="pomo-ctl">
+          <button class="icon-btn" id="pomoStart" title="Mulai / jeda timer">
+            <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-btn" id="pomoReset" title="Reset timer"><span aria-hidden="true">↺</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="weakWrap" class="weak-wrap" hidden>
+      <span class="weak-k">SERING SALAH</span>
+      <div class="weak-chips" id="weakChips"></div>
+      <button class="btn btn-line btn-sm weak-goto" data-goto="flashcards">Hafalkan lagi →</button>
+    </div>
+
     <div class="tabbar">
       <button class="tab active" data-tab="summary">Ringkasan</button>
       <button class="tab" data-tab="flashcards">Flashcard</button>
@@ -389,6 +424,7 @@
             <p class="muted">Balik kartu untuk menguji ingatanmu.</p>
           </div>
           <div class="panel-actions">
+            <button class="btn btn-line btn-sm" id="btnPrintCards">Cetak kartu ↗</button>
             <button class="btn btn-line btn-sm" id="btnRegenCards">Ulang (AI) ↻</button>
           </div>
         </div>
@@ -512,6 +548,8 @@
   <div class="spinner"></div>
   <p id="loadingText">Memproses...</p>
 </div>
+
+<div id="printArea" class="print-area"></div>
 
 <script src="js/stopwords.js"></script>
 <script src="js/textutil.js"></script>

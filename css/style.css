@@ -774,3 +774,78 @@ kbd {
 /* hint kecil di upload */
 .hint { margin-top: 8px; font-size: .78rem; color: var(--muted); line-height: 1.55; }
 .hint strong { color: var(--ink); }
+
+/* ===========================================================
+   BELAJAR KUY v3 � SRS, stats, export, pomodoro, print
+   =========================================================== */
+
+/* menu unduh */
+.app-topbar-actions { position: relative; flex-wrap: wrap; }
+.menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; min-width: 230px;
+  background: var(--paper-2); border: 1px solid var(--line-strong); border-radius: 10px;
+  box-shadow: var(--shadow-lift); padding: 6px;
+}
+.menu-item {
+  display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 7px;
+  font-size: .86rem; font-weight: 600; color: var(--ink);
+}
+.menu-item:hover { background: var(--paper); }
+
+/* strip statistik */
+.dash-stats {
+  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  background: var(--paper-2); padding: 12px 16px; margin-bottom: 10px;
+}
+.dash-stat { display: flex; align-items: baseline; gap: 8px; padding-right: 14px; border-right: 1px solid var(--line); }
+.dash-stat:last-child { border-right: none; padding-right: 0; }
+.dash-k { font-family: var(--font-mono); font-size: .6rem; letter-spacing: .16em; color: var(--muted); }
+.dash-stat strong { font-family: var(--font-display); font-size: 1.15rem; font-weight: 900; letter-spacing: -.01em; }
+.dash-stat.pomo strong.pomo-break { color: var(--ok); }
+.pomo-ctl { display: inline-flex; gap: 4px; }
+.pomo-ctl .icon-btn { width: 26px; height: 26px; }
+.pomo-ctl .ic { width: 12px; height: 12px; }
+
+/* kelemahan */
+.weak-wrap {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  border: 1px dashed color-mix(in srgb, var(--err) 55%, transparent);
+  border-radius: 10px; background: color-mix(in srgb, var(--err) 6%, var(--paper));
+  padding: 12px 16px; margin-bottom: 22px;
+}
+.weak-k { font-family: var(--font-mono); font-size: .62rem; letter-spacing: .14em; color: var(--err); }
+.weak-chips { display: flex; gap: 7px; flex-wrap: wrap; flex: 1; }
+.weak-chip {
+  font-family: var(--font-mono); font-size: .7rem; color: var(--ink);
+  border: 1px solid var(--line-strong); background: var(--paper-2);
+  padding: 5px 10px; border-radius: 5px;
+}
+
+/* tombol tanya di poin ringkasan */
+.ask-btn {
+  display: block; margin-top: 10px; padding: 0; border: none; background: none; cursor: pointer;
+  font-family: var(--font-mono); font-size: .68rem; letter-spacing: .06em;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 3px;
+}
+.ask-btn:hover { color: var(--ink); }
+
+/* area cetak (tersembunyi di layar) */
+.print-area { display: none; }
+
+/* ============================ PRINT ============================ */
+@media print {
+  body { background: #fff !important; }
+  body > * { display: none !important; }
+  body > .print-area { display: block !important; }
+  .print-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 22px; font-family: Georgia, serif; }
+  .print-head span { font-size: 11px; color: #444; }
+  .print-card {
+    break-inside: avoid; page-break-inside: avoid;
+    border: 1px solid #bbb; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .pc-q { display: flex; align-items: flex-start; gap: 10px; font-weight: 700; font-family: Georgia, serif; font-size: 16px; }
+  .pc-q p { flex: 1; margin: 0; }
+  .pc-no { font-family: "Courier New", monospace; font-size: 11px; line-height: 22px; color: #888; }
+  .pc-a { font-size: 13px; color: #333; border-top: 1px dotted #ccc; margin-top: 10px; padding-top: 10px; font-family: Georgia, serif; }
+}

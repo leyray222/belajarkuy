@@ -1,0 +1,14 @@
+{
+  "name": "BelajarKuy — Belajar cepat dengan AI",
+  "short_name": "BelajarKuy",
+  "description": "Ubah materi jadi ringkasan, flashcard, kuis, dan AI tutor. Gratis selamanya. by Panji Yusuf.",
+  "lang": "id",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3efe6",
+  "theme_color": "#f3efe6",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
