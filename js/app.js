@@ -44,7 +44,10 @@
   function applyTheme(t) {
     document.documentElement.setAttribute("data-theme", t);
     localStorage.setItem("belajarkuy_theme", t);
-    $("themeToggle").textContent = t === "dark" ? "☀️" : "🌙";
+    const moon = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+    const sun = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+    $("themeToggle").innerHTML = t === "dark" ? sun : moon;
+    $("themeToggle").title = t === "dark" ? "Beralih ke tema terang" : "Beralih ke tema gelap";
   }
   function initTheme() {
     let t = localStorage.getItem("belajarkuy_theme");
@@ -85,7 +88,7 @@
     AIService.saveSettings({ provider: provider, apiKey: apiKey, model: model });
     aiConfigured = AIService.isConfigured();
     updateModeBadge();
-    showSettingsToast("Tersimpan ✔");
+    showSettingsToast("Tersimpan.");
   }
 
   function showSettingsToast(msg, type) {
@@ -242,7 +245,7 @@
   function handleMedia(file) {
     if (!aiConfigured) {
       hideLoading();
-      const msg = "Untuk memproses file audio/video butuh transkripsi. Tambahkan API key Gemini gratis di ⚙️, atau gunakan link YouTube, atau tempel transkripnya manual.";
+      const msg = "Untuk memproses file audio/video butuh transkripsi. Tambahkan API key Gemini (gratis) di menu Pengaturan, atau gunakan link YouTube, atau tempel transkripnya manual.";
       setNote(msg, "err");
       toast(msg, "err");
       return;
@@ -293,7 +296,7 @@
     showView("apps");
     renderByState();
     updateModeBadge();
-    if (!hasAll) toast("Materi berhasil diproses! 🎉", "ok");
+    if (!hasAll) toast("Materi berhasil diproses.", "ok");
   }
 
   async function buildSummary() {
@@ -386,7 +389,7 @@
   function renderSummary() {
     const c = $("summaryContent");
     if (!state.summary.length) {
-      c.innerHTML = '<div class="empty-hint">Tekan "Proses Materi" dulu ya 👆</div>';
+      c.innerHTML = '<div class="empty-hint">Tekan "Proses materi" dulu ya.</div>';
       return;
     }
     c.innerHTML = state.summary.map(function (s, i) {
@@ -469,7 +472,7 @@
     deckPos = 0;
     $("cardQ").textContent = deck[0].q;
     $("cardA").textContent = deck[0].a;
-    toast("Semua kartu dihafal! 🎉 Deck diulang untuk penguatan.", "ok");
+    toast("Semua kartu dihafal — deck diulang untuk penguatan.", "ok");
     updateCardCount();
   }
 
@@ -518,7 +521,7 @@
         '<div class="quiz-feedback" id="qf' + i + '"></div>' +
         "</div>";
     }).join("") +
-      '<div class="quiz-actions"><button class="btn btn-primary" id="btnQuizSubmit">✅ Periksa Jawaban</button></div>';
+      '<div class="quiz-actions"><button class="btn btn-solid" id="btnQuizSubmit">Periksa jawaban →</button></div>';
     c.querySelectorAll(".quiz-opt").forEach(function (btn) {
       btn.addEventListener("click", function () {
         const qi = parseInt(btn.dataset.q, 10);
@@ -543,11 +546,11 @@
         if (bi === correctIdx) b.classList.add("correct");
         else if (bi === picked) b.classList.add("wrong");
       });
-      if (picked === correctIdx) { score++; quizState[i].correct = true; feedback.textContent = "✅ Benar!"; feedback.className = "quiz-feedback ok"; }
-      else { feedback.textContent = picked === -1 ? "❌ Tidak dijawab. Jawaban benar ditandai hijau." : "❌ Kurang tepat. Jawaban benar ditandai hijau."; feedback.className = "quiz-feedback err"; }
+      if (picked === correctIdx) { score++; quizState[i].correct = true; feedback.textContent = "Benar."; feedback.className = "quiz-feedback ok"; }
+      else { feedback.textContent = picked === -1 ? "Tidak dijawab — jawaban benar ditandai hijau." : "Kurang tepat — jawaban benar ditandai hijau."; feedback.className = "quiz-feedback err"; }
     });
     $("quizScore").textContent = "Skor: " + score + " / " + state.quiz.length;
-    toast("Skor kamu: " + score + "/" + state.quiz.length + (score === state.quiz.length ? " — sempurna! 🏆" : ""));
+    toast("Skor kamu: " + score + "/" + state.quiz.length + (score === state.quiz.length ? " — skor sempurna." : ""));
   }
 
   function regenQuiz() {
@@ -565,7 +568,9 @@
     const box = $("chatBox");
     const div = document.createElement("div");
     div.className = "chat-msg " + role;
-    div.innerHTML = role === "ai" ? "<span>🤖</span><div>" + html + "</div>" : "<span>🧑‍🎓</span><div>" + html + "</div>";
+    div.innerHTML = role === "ai"
+      ? '<span class="chat-ava">KY</span><div>' + html + "</div>"
+      : '<span class="chat-ava">MU</span><div>' + html + "</div>";
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
     return div;
@@ -583,7 +588,7 @@
     try {
       reply = await answerQuestion(state.text, msg);
     } catch (e) {
-      reply = "⚠️ Terjadi kesalahan: " + escapeHtml(e.message);
+      reply = "Terjadi kesalahan: " + escapeHtml(e.message);
     }
     typing.querySelector("div").innerHTML = reply;
     typing.querySelector("div").style.whiteSpace = "pre-wrap";
@@ -592,7 +597,7 @@
 
   function localAnswer(text, question) {
     const sentences = TextUtil.splitSentences(text);
-    if (!sentences.length) return "Belum ada materi. Upload dulu ya 👆";
+    if (!sentences.length) return "Belum ada materi. Upload dulu ya.";
     const qwords = TextUtil.tokenize(question);
     const cwords = qwords.filter(function (w) { return !Stopwords.isStopword(w); });
     const scored = [];
@@ -606,12 +611,12 @@
     }
     scored.sort(function (a, b) { return (b.hit / Math.sqrt(b.len || 1)) - (a.hit / Math.sqrt(a.len || 1)); });
     if (scored.length === 0) {
-      return "Hmm, aku tidak menemukan jawaban di materimu untuk: <em>" + escapeHtml(question) + "</em>.<br><br>💡 Aktifkan <strong>AI Online</strong> di ⚙️ Pengaturan (gratis) agar aku bisa menjawab pakai model AI. Untuk sekarang, coba pertanyaan yang lebih sederhana atau cek bagian materi lainnya.";
+      return "Hmm, aku tidak menemukan jawaban di materimu untuk: <em>" + escapeHtml(question) + "</em>.<br><br>Saran: aktifkan <strong>AI Online</strong> di menu Pengaturan (gratis) agar aku bisa menjawab pakai model AI. Untuk sekarang, coba pertanyaan yang lebih sederhana atau telusuri bagian materi lainnya.";
     }
     const top = scored.slice(0, Math.min(3, scored.length));
     let html = "<p>Menurut materimu:</p><ul>";
     top.forEach(function (r) { html += "<li>" + escapeHtml(r.s) + "</li>"; });
-    html += "</ul><p style='opacity:.7;font-size:.85em'>💡 Jawaban di atas diambil langsung dari materi (Mode Lokal). Aktifkan AI Online untuk penjelasan yang lebih mendalam.</p>";
+    html += "</ul><p style='opacity:.7;font-size:.85em'>Catatan: jawaban di atas diambil langsung dari materi (Mode Lokal). Aktifkan AI Online untuk penjelasan yang lebih dalam.</p>";
     return html;
   }
 
@@ -662,7 +667,7 @@
     if (inner) inner.classList.remove("flipped");
     renderByState();
     window.scrollTo({ top: 0, behavior: "smooth" });
-    toast("Mulai materi baru ✍️");
+    toast("Mulai materi baru.");
   }
 
   /* ---------- Init ---------- */
@@ -699,7 +704,7 @@
       showSettingsToast("Menghubungi AI...");
       try {
         const r = await AIService.testConnection();
-        showSettingsToast("Koneksi OK ✔ Respons: " + r.slice(0, 40));
+        showSettingsToast("Koneksi OK. Respons: " + r.slice(0, 40));
       } catch (e) {
         showSettingsToast("Gagal: " + e.message, "err");
       }
@@ -717,7 +722,7 @@
     $("btnCopySummary").addEventListener("click", function () {
       if (!state.summary.length) return;
       const txt = state.summary.map(function (s, i) { return (i + 1) + ". " + s; }).join("\n");
-      navigator.clipboard.writeText(txt).then(function () { toast("Ringkasan disalin 📋", "ok"); }).catch(function () { toast("Gagal menyalin", "err"); });
+      navigator.clipboard.writeText(txt).then(function () { toast("Ringkasan disalin.", "ok"); }).catch(function () { toast("Gagal menyalin.", "err"); });
     });
     $("btnChatSend").addEventListener("click", sendChat);
     $("chatInput").addEventListener("keydown", function (e) {
