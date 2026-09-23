@@ -770,3 +770,7 @@ kbd {
   border: 1px solid var(--line-strong); border-radius: 4px; padding: 1px 6px; margin: 0 2px;
   font-family: var(--font-mono); font-size: .7rem; color: var(--ink); background: var(--paper-2);
 }
+
+/* hint kecil di upload */
+.hint { margin-top: 8px; font-size: .78rem; color: var(--muted); line-height: 1.55; }
+.hint strong { color: var(--ink); }

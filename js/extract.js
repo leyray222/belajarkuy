@@ -109,35 +109,105 @@ window.Extractor = (function () {
     return m ? m[1] : null;
   }
 
+  const TS_BLOCKED = "youtube-sedang-memblokir";
+
+  async function httpGet(url, opts) {
+    const signal = (opts && opts.signal) || (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(22000) : undefined);
+    const headers = (opts && opts.headers) || {};
+    const resp = await fetch(url, { signal: signal, headers: headers });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return resp.text();
+  }
+
+  /* Ambil daftar track subtitle lewat API timedtext YouTube (tanpa proxy).
+     Endpoint ini biasa mengizinkan CORS; jika kosong berarti tidak tersedia. */
+  async function fetchTimedtext(vid) {
+    const list = await httpGet("https://www.youtube.com/api/timedtext?type=list&v=" + vid);
+    const tracks = [];
+    const re = /<track[^>]*>/g;
+    let m;
+    while ((m = re.exec(list)) !== null) {
+      const tag = m[0];
+      const lang = (tag.match(/lang="([^"]+)"/) || [])[1] || "";
+      const name = (tag.match(/name="([^"]*)"/) || [])[1] || lang;
+      const kind = (tag.match(/kind="([^"]+)"/) || [])[1] || "manual";
+      if (lang) tracks.push({ lang: lang, name: name, kind: kind });
+    }
+    if (!tracks.length) return "";
+    // prefer manual berbahasa Indonesia, lalu manual, lalu auto id, lalu auto
+    const pick = tracks.find(function (t) { return t.kind !== "asr" && t.lang === "id"; })
+      || tracks.find(function (t) { return t.kind !== "asr"; })
+      || tracks.find(function (t) { return t.lang === "id"; })
+      || tracks[0];
+    let url = "https://www.youtube.com/api/timedtext?type=track&lang=" + encodeURIComponent(pick.lang) + "&v=" + vid;
+    if (pick.kind === "asr") url += "&kind=asr";
+    const body = await httpGet(url);
+    return parseTranscriptXml("<transcript>" + body + "</transcript>");
+  }
+
   async function fetchYouTubeTranscript(url) {
     const vid = ytVideoId(url);
     if (!vid) throw new Error("Link YouTube tidak dikenali. Pastikan formatnya valid.");
-    const target = encodeURIComponent("https://youtubetranscript.com/?server_vid2=" + vid);
-    // coba beberapa proxy CORS publik
-    const proxies = [
-      "https://api.allorigins.win/raw?url=" + target,
-      "https://corsproxy.io/?url=" + target,
-      "https://api.codetabs.com/v1/proxy?quest=" + target
+
+    const tiers = [
+      { name: "timedtext", run: function () { return fetchTimedtext(vid); } },
+      { name: "youtube-transcript.io", run: async function () {
+          const body = await httpGet("https://youtube-transcript.io/api/transcript?videoId=" + vid + "&format=json");
+          if (!/^\s*[\[{]/.test(body)) throw new Error("layanan butuh kunci API");
+          const data = JSON.parse(body);
+          const arr = data.transcript || data;
+          if (!Array.isArray(arr)) throw new Error("format tak dikenal");
+          return arr.map(function (t) { return t.text || ""; }).filter(Boolean).join(" ");
+        } },
+      { name: "youtubetranscript(jina)", run: function () { return fetchSourceAsXml("https://youtubetranscript.com/?server_vid2=" + vid); } },
+      { name: "youtubetranscript(allorigins)", run: function () { return fetchViaProxy("https://api.allorigins.win/raw?url=", "https://youtubetranscript.com/?server_vid2=" + vid); } },
+      { name: "youtubetranscript(codetabs)", run: function () { return fetchViaProxy("https://api.codetabs.com/v1/proxy?quest=", "https://youtubetranscript.com/?server_vid2=" + vid); } }
     ];
+
     let lastErr = null;
-    for (const proxy of proxies) {
+    for (const tier of tiers) {
       try {
-        const resp = await fetch(proxy, { signal: AbortSignal.timeout(25000) });
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const xml = await resp.text();
-        const caps = parseTranscriptXml(xml);
-        if (caps && caps.trim().length > 40) return TextUtil.clean(caps);
+        const text = await tier.run();
+        const clean = TextUtil.clean(String(text || ""));
+        if (clean && clean.length > 40) return clean;
       } catch (e) { lastErr = e; }
     }
-    if (lastErr) throw new Error("Gagal mengambil transkrip YouTube (batasan proxy internet). Coba tempel teksnya manual atau cek koneksi.");
+    if (lastErr && lastErr.message === TS_BLOCKED) {
+      throw new Error("Layanan transkrip pihak ketiga sedang diblokir YouTube (bukan koneksimu). Coba video lain, ulangi beberapa saat lagi, atau tempel teksnya manual.");
+    }
+    throw new Error("Gagal mengambil transkrip YouTube. Coba lagi, atau tempel teksnya manual di bawah.");
+  }
+
+  async function fetchViaProxy(proxy, target) {
+    const body = await httpGet(proxy + encodeURIComponent(target));
+    return parseAnyTranscript(body);
+  }
+
+  async function fetchSourceAsXml(target) {
+    const body = await httpGet("https://r.jina.ai/" + target, { headers: { "X-Return-Format": "text" } });
+    return parseAnyTranscript(body);
+  }
+
+  /* Cari XML <transcript>/<text> atau kutipan halaman apa pun yang bisa dipakai. */
+  function parseAnyTranscript(content) {
+    if (String(content).indexOf("currently blocking us") !== -1 ||
+        String(content).indexOf("we're sorry, youtube is currently") !== -1) {
+      throw new Error(TS_BLOCKED);
+    }
+    const text = parseTranscriptXml(String(content));
+    if (text && text.trim().length > 20) return text;
     return "";
   }
 
   function parseTranscriptXml(xml) {
+    // buang segala teks sebelum tag <transcript> agar aman walau dibungkus HTML/markdown
+    const doc = String(xml);
+    const start = doc.search(/<text\b/i);
+    const slice = start === -1 ? doc : doc.slice(start);
     const texts = [];
-    const re = /<text[^>]*>(.*?)<\/text>/g;
+    const re = /<text\b[^>]*>(.*?)<\/text>/gs;
     let m;
-    while ((m = re.exec(xml)) !== null) {
+    while ((m = re.exec(slice)) !== null) {
       texts.push(m[1].replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
     }
     return texts.join(" ");
