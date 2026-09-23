@@ -112,8 +112,8 @@
     if (bank.qs.length > 600) bank.qs.shift();
     saveBank();
   }
-  function bankAddFromQuiz(q) {
-    const c = normBankQ(q, "Dari kuis");
+  function bankAddFromQuiz(q, src) {
+    const c = normBankQ(q, src || "Dari kuis");
     if (c) { bankAddNormalized(c); renderBankMeta(); }
   }
   function bankQuizFilter() {
@@ -918,6 +918,8 @@
   /* ---------- Quiz engine ---------- */
   let quizState = [];
   function renderQuiz() {
+    $("btnTryout").hidden = false;
+    $("btnRegenQuiz").hidden = false;
     quizState = state.quiz.map(function (q) { return { answered: false, correct: false }; });
     $("quizScore").textContent = "";
     const c = $("quizContent");
@@ -997,6 +999,234 @@
     }).catch(function (e) { hideLoading(); toast(e.message, "err"); });
   }
 
+  /* ---------- Tryout / Mode Ujian ---------- */
+  let exam = null;
+  let examTimerId = null;
+  let examPace = 35;
+  const EXAM_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+  function shuffleArr(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function shortTxt(s, n) {
+    s = String(s);
+    return s.length > (n || 90) ? s.slice(0, (n || 90)) + "…" : s;
+  }
+  function examSetup() {
+    $("btnTryout").hidden = true;
+    $("btnRegenQuiz").hidden = true;
+    $("quizScore").textContent = "";
+    $("quizContent").innerHTML =
+      '<div class="exam-setup"><div class="quiz-qn"><span class="num">UA</span><span class="quiz-qt">Mode Ujian</span></div>' +
+      '<p class="muted">' + state.quiz.length + " soal, dikerjakan satu per satu tanpa koreksi langsung. Nilai muncul setelah kamu kumpulkan.</p>" +
+      '<div class="seg" id="examPace">' +
+      '<button class="seg-btn" data-p="20">Cepat · 20 dtk</button>' +
+      '<button class="seg-btn active" data-p="35">Standar · 35 dtk</button>' +
+      '<button class="seg-btn" data-p="60">Santai · 60 dtk</button></div>' +
+      '<p class="muted" id="examSub">Durasi: ' + Math.max(1, Math.ceil(examPace * state.quiz.length / 60)) + " menit</p>" +
+      '<div class="quiz-actions">' +
+      '<button class="btn btn-solid" id="btnExamStart">Mulai ujian →</button>' +
+      '<button class="btn btn-line" id="btnExamBack">← Latihan</button></div></div>';
+    let paceFired = false;
+    document.querySelectorAll("#examPace .seg-btn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        examPace = parseInt(b.dataset.p, 10);
+        document.querySelectorAll("#examPace .seg-btn").forEach(function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        $("examSub").textContent = "Durasi: " + Math.max(1, Math.ceil(examPace * state.quiz.length / 60)) + " menit";
+      });
+    });
+    $("btnExamStart").addEventListener("click", beginExam);
+    $("btnExamBack").addEventListener("click", renderQuiz);
+  }
+  function beginExam() {
+    const n = state.quiz.length;
+    exam = {
+      n: n,
+      order: shuffleArr(state.quiz.map(function (_, i) { return i; })),
+      answers: new Array(n),
+      marks: new Array(n).fill(false),
+      pos: 0,
+      remaining: Math.ceil(n * examPace),
+      elapsed: 0,
+      auto: false
+    };
+    renderExam();
+    examTimerId = setInterval(tickExam, 1000);
+  }
+  function renderExam() {
+    const s = exam;
+    $("quizScore").textContent = "";
+    $("quizContent").innerHTML =
+      '<div class="exam-bar">' +
+      '<span class="stat-chip">Soal ' + (s.pos + 1) + " / " + s.n + "</span>" +
+      '<span class="stat-chip exam-timer" id="examTimer">' + fmtTime(s.remaining) + "</span>" +
+      '<span class="stat-chip exam-mark">' + (s.marks[s.pos] ? "● Ditandai" : "○ Belum") + "</span>" +
+      '<button class="btn btn-line btn-sm" id="btnExamMark">Tandai</button>' +
+      '<button class="btn btn-line btn-sm" id="btnExamExit">Keluar</button></div>' +
+      '<div class="quiz-content" style="padding:0">' + renderExamQ(s.pos) + "</div>" +
+      '<div class="quiz-actions">' +
+      (s.pos > 0 ? '<button class="btn btn-line" id="btnExamPrev">← Sebelumnya</button>' : "") +
+      (s.pos < s.n - 1 ? '<button class="btn btn-solid" id="btnExamNext">Berikutnya →</button>' : '<button class="btn btn-solid" id="btnExamSubmit">Kumpulkan ujian</button>') +
+      '<button class="btn btn-line alert" id="btnExamSubmitAll">Kumpulkan</button>' +
+      "</div>";
+    document.querySelectorAll("#quizContent .quiz-opt").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const oi = parseInt(b.dataset.opt, 10);
+        if (typeof exam.answers[exam.pos] === "number") {
+          document.querySelectorAll("#quizContent .quiz-opt").forEach(function (x) { x.classList.remove("selected"); });
+        }
+        document.querySelectorAll("#quizContent .quiz-opt").forEach(function (x) { x.classList.remove("selected"); });
+        b.classList.add("selected");
+        exam.answers[exam.pos] = oi;
+      });
+    });
+    $("btnExamMark").addEventListener("click", toggleMark);
+    $("btnExamExit").addEventListener("click", cancelExam);
+    const prev = $("btnExamPrev");
+    if (prev) prev.addEventListener("click", function () { exam.pos--; renderExam(); });
+    const next = $("btnExamNext");
+    if (next) next.addEventListener("click", function () { exam.pos++; renderExam(); });
+    const sub = $("btnExamSubmit");
+    if (sub) sub.addEventListener("click", function () { submitExam(); });
+    $("btnExamSubmitAll").addEventListener("click", submitExam);
+  }
+  function renderExamQ(i) {
+    const q = state.quiz[exam.order[i]];
+    const opts = q.options.map(function (o, oi) {
+      return '<button class="quiz-opt' + (exam.answers[i] === oi ? " selected" : "") + '" data-opt="' + oi + '">' +
+        '<span class="opt-let">' + (EXAM_LETTERS[oi] || (oi + 1)) + "</span>" +
+        '<span class="opt-txt">' + escapeHtml(o.text) + "</span></button>";
+    }).join("");
+    return '<div class="quiz-question">' +
+      '<div class="quiz-qn"><span class="num">' + (i + 1) + "</span>" +
+      '<span class="quiz-qt">' + escapeHtml(q.q) + "</span></div>" +
+      '<div class="quiz-opts">' + opts + "</div></div>";
+  }
+  function toggleMark() {
+    if (!exam) return;
+    exam.marks[exam.pos] = !exam.marks[exam.pos];
+    renderExam();
+  }
+  function tickExam() {
+    if (!exam) return;
+    exam.remaining--;
+    exam.elapsed++;
+    const t = $("examTimer");
+    if (t) {
+      t.textContent = fmtTime(exam.remaining);
+      t.classList.toggle("urgent", exam.remaining <= 60);
+    }
+    if (exam.remaining <= 0) { exam.auto = true; submitExam(true); }
+  }
+  function submitExam(silent) {
+    if (!exam) return;
+    const unanswered = exam.answers.filter(function (a) { return typeof a !== "number"; }).length;
+    if (unanswered) {
+      const abort = typeof confirm === "undefined" ? false : !confirm("Masih " + unanswered + " soal belum dijawab. Kumpulkan sekarang?");
+      if (abort) return;
+    }
+    clearInterval(examTimerId);
+    examTimerId = null;
+    const s = exam;
+    let score = 0;
+    const wrong = [];
+    for (let i = 0; i < s.n; i++) {
+      const q = state.quiz[s.order[i]];
+      const correctIdx = q.options.findIndex(function (o) { return o.correct; });
+      if (s.answers[i] === correctIdx) score++;
+      else wrong.push(q);
+    }
+    const st = loadStats();
+    st.attempts += s.n;
+    st.correct += score;
+    saveStats(st);
+    if (wrong.length) {
+      wrong.forEach(function (q) {
+        const w = getWeak();
+        if (!w.some(function (x) { return x.q === q.q; })) w.push({ q: q.q });
+        if (w.length > 8) w.splice(0, w.length - 8);
+        saveWeak(w);
+        bankAddFromQuiz(q, "Salah di tryout");
+      });
+      renderWeak();
+    }
+    renderDashStats();
+    renderExamResult(score, wrong);
+    toast("Tryout: " + score + "/" + s.n + (score === s.n ? " — sempurna!" : ""));
+  }
+  function renderExamResult(score, wrong) {
+    const s = exam;
+    const n = s.n;
+    const pct = Math.round((score / n) * 100);
+    let status = "Kamu lancar di materi ini. Pertahankan!";
+    if (pct >= 90) status = "Luar biasa — kamu menguasai materi ini.";
+    else if (pct < 70) status = "Masih perlu diulang. Kerjakan yang salah di Bank Soal, lalu coba lagi.";
+    const letters = EXAM_LETTERS;
+    const review = [];
+    for (let i = 0; i < n; i++) {
+      const q = state.quiz[s.order[i]];
+      const correctIdx = q.options.findIndex(function (o) { return o.correct; });
+      const picked = s.answers[i];
+      const ok = picked === correctIdx;
+      review.push('<div class="rev ' + (ok ? "rev-ok" : "rev-err") + '"><b>' + (i + 1) + "</b> " +
+        escapeHtml(shortTxt(q.q)) +
+        '<br><span class="rev-det">Jawabanmu: <strong>' + (typeof picked === "number" ? letters[picked] + ". " + escapeHtml(shortTxt((q.options[picked] || {}).text, 60)) : "— tidak dijawab") +
+        "</strong> · Benar: <strong>" + letters[correctIdx] + ". " + escapeHtml(shortTxt(q.options[correctIdx].text, 60)) + "</strong></span></div>");
+    }
+    $("btnTryout").hidden = false;
+    $("btnRegenQuiz").hidden = false;
+    $("quizContent").innerHTML =
+      '<div class="exam-result">' +
+      '<div class="quiz-qn"><span class="num">' + score + "</span>" +
+      '<span class="quiz-qt">Skor ' + score + " dari " + n + " · " + pct + "%</span></div>" +
+      '<div class="quiz-feedback ' + (pct >= 70 ? "ok" : "err") + '">' + status + "</div>" +
+      '<p class="muted">Waktu: ' + fmtTime(s.elapsed) + (s.auto ? " · <span style=\"color:var(--err)\">waktu habis, dikumpulkan otomatis</span>" : "") + "</p>" +
+      '<div class="rev-list">' + review.join("") + "</div>" +
+      '<div class="quiz-actions">' +
+      '<button class="btn btn-solid" id="btnTryRetry">Ulang ujian ↻</button>' +
+      '<button class="btn btn-line" id="btnTryBank">Latih yang salah → Bank</button>' +
+      '<button class="btn btn-line" id="btnTrySave">Unduh hasil ▾</button>' +
+      '<button class="btn btn-line" id="btnTryBack">← Latihan</button></div></div>';
+    $("btnTryRetry").addEventListener("click", beginExam);
+    $("btnTryBank").addEventListener("click", function () {
+      exam = null;
+      switchTab("bank");
+      bankFilter = "weak";
+      document.querySelectorAll("#bankFilter .seg-btn").forEach(function (b) { b.classList.toggle("active", b.dataset.f === "weak"); });
+      startBank();
+    });
+    $("btnTrySave").addEventListener("click", function () {
+      download("belajarkuy-hasil-tryout.json", JSON.stringify({
+        app: "belajarkuy", kind: "tryout", materi: state.title, waktu: s.elapsed, score: score, total: n,
+        soal: review.map(function (r, i) { return r; })
+      }, null, 2), "application/json");
+    });
+    $("btnTryBack").addEventListener("click", function () { exam = null; renderQuiz(); });
+  }
+  function cancelExam() {
+    if (!exam) return;
+    const ok = typeof confirm === "undefined" ? true : confirm("Hentikan ujian? Jawaban yang sudah diisi tidak akan dinilai.");
+    if (ok) {
+      clearInterval(examTimerId);
+      examTimerId = null;
+      exam = null;
+      renderQuiz();
+      toast("Tryout dibatalkan.", "ok");
+    }
+  }
+  function initTryout() {
+    $("btnTryout").addEventListener("click", function () {
+      if (!state.quiz.length) { toast("Buat soal dulu — upload materi lalu buka tab Kuis.", "err"); return; }
+      examSetup();
+    });
+  }
+
   /* ---------- Chat ---------- */
   function addChatMsg(role, html) {
     const box = $("chatBox");
@@ -1074,19 +1304,23 @@
   }
 
   /* ---------- Tabs ---------- */
+  function switchTab(name) {
+    document.querySelectorAll(".tab").forEach(function (t) { t.classList.toggle("active", t.dataset.tab === name); });
+    document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("active", p.id === "panel-" + name); });
+  }
   function initTabs() {
     document.querySelectorAll(".tab").forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        document.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
-        tab.classList.add("active");
-        document.querySelectorAll(".panel").forEach(function (p) { p.classList.remove("active"); });
-        $("panel-" + tab.dataset.tab).classList.add("active");
-      });
+      tab.addEventListener("click", function () { switchTab(tab.dataset.tab); });
     });
   }
 
   /* ---------- New material ---------- */
   function resetMaterial() {
+    if (exam) {
+      clearInterval(examTimerId);
+      examTimerId = null;
+      exam = null;
+    }
     state.title = "";
     state.text = "";
     state.summary = [];
@@ -1410,6 +1644,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
     initPomodoro();
     initPrint();
     initAsk();
+    initTryout();
     initBank();
     initPWA();
 

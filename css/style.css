@@ -864,3 +864,31 @@ kbd {
   border: 1px solid var(--line-strong); background: var(--paper-2);
   padding: 6px 11px; border-radius: 6px;
 }
+
+/* ===========================================================
+   TRYOUT / MODE UJIAN
+   =========================================================== */
+.exam-setup { max-width: 560px; }
+.exam-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 16px;
+  background: var(--paper-2); border: 1px solid var(--line-strong); border-radius: 10px;
+  font-family: var(--font-mono); font-size: .74rem;
+}
+.exam-timer { font-size: 1.05rem; font-weight: 700; letter-spacing: .04em; }
+.exam-timer.urgent { color: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.exam-mark .mark { font-weight: 700; }
+.exam-posnum { font-family: var(--font-mono); font-size: .72rem; color: var(--ink-2); display: block; margin-bottom: 8px; }
+.btn.alert { border-color: var(--accent); color: var(--accent); }
+.exam-bar .btn { margin-left: auto; }
+.rev-list { display: grid; gap: 10px; margin-top: 16px; }
+.rev {
+  display: block; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line-strong); background: var(--paper-2);
+  font-size: .88rem; line-height: 1.5; color: var(--ink);
+}
+.rev b { margin-right: 8px; font-family: var(--font-mono); }
+.rev-ok { border-left: 3px solid var(--ok); }
+.rev-err { border-left: 3px solid var(--accent); }
+.rev-det { display: block; font-size: .78rem; color: var(--ink-2); margin-top: 5px; }
+@media (max-width: 560px) { .exam-bar .btn { margin-left: 0; } }

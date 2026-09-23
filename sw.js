@@ -1,5 +1,5 @@
 /* BelajarKuy service worker — offline shell + cache-first untuk aset lokal */
-const CACHE = "belajarkuy-v2";
+const CACHE = "belajarkuy-v3";
 const SHELL = [
   "./",
   "./index.html",
