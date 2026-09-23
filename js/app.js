@@ -15,6 +15,8 @@
     quiz: []
   };
   const chatHistory = [];
+  let summaryRaw = [];
+  let summaryDensity = 8;
 
   /* ---------- Toast & loading ---------- */
   let toastTimer = null;
@@ -131,6 +133,7 @@
           state.title = d.title || "Materi";
           state.text = d.text;
           state.summary = Array.isArray(d.summary) ? d.summary : [];
+          summaryRaw = state.summary.slice();
           state.cards = Array.isArray(d.cards) ? d.cards : [];
           state.quiz = Array.isArray(d.quiz) ? d.quiz : [];
           return true;
@@ -146,6 +149,8 @@
     state.summary = [];
     state.cards = [];
     state.quiz = [];
+    summaryRaw = [];
+    summaryDensity = 8;
     chatHistory.length = 0;
     saveDoc();
   }
@@ -300,6 +305,7 @@
   }
 
   async function buildSummary() {
+    let out;
     if (aiConfigured) {
       const extra = $("summaryPrompt") ? $("summaryPrompt").value.trim() : "";
       try {
@@ -307,14 +313,29 @@
         const user = "Buat ringkasan penting materi berikut dalam bahasa Indonesia, 5-12 poin, bahasa sederhana dan mudah dipahami. " +
           (extra ? "Instruksi tambahan: " + extra + ". " : "") +
           "HANYA JSON:\n\nMATERI:\n" + textPreview(state.text);
-        const out = await AIService.textComplete(sys, user, { temperature: 0.4 });
-        const arr = AIService.parseJsonStrict(out);
-        if (Array.isArray(arr) && arr.length >= 2) return arr.map(function (s) { return String(s); });
+        const resp = await AIService.textComplete(sys, user, { temperature: 0.4 });
+        const arr = AIService.parseJsonStrict(resp);
+        out = (Array.isArray(arr) && arr.length >= 2) ? arr.map(function (s) { return String(s); }) : null;
       } catch (e) {
         console.warn("AI summary gagal, fallback lokal:", e.message);
       }
     }
-    return Summarizer.summarize(state.text);
+    if (!out) out = Summarizer.summarize(state.text, { maxPoints: 12 });
+    summaryRaw = out.slice();
+    saveSummaryState();
+    return out;
+  }
+
+  function saveSummaryState() {
+    if (state.summary !== summaryRaw) state.summary = summaryRaw.slice();
+    try {
+      const raw = localStorage.getItem(DOC_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        d.summary = summaryRaw;
+        localStorage.setItem(DOC_KEY, JSON.stringify(d));
+      }
+    } catch (e) {}
   }
 
   async function buildCards() {
@@ -388,14 +409,19 @@
 
   function renderSummary() {
     const c = $("summaryContent");
-    if (!state.summary.length) {
+    const list = displaySummary();
+    if (!list.length) {
       c.innerHTML = '<div class="empty-hint">Tekan "Proses materi" dulu ya.</div>';
       return;
     }
-    c.innerHTML = state.summary.map(function (s, i) {
+    c.innerHTML = list.map(function (s, i) {
       const esc = escapeHtml(s);
       return '<div class="summary-item"><div class="num">' + (i + 1) + "</div><div>" + esc + "</div></div>";
     }).join("");
+  }
+
+  function displaySummary() {
+    return summaryRaw.slice(0, Math.max(3, summaryDensity));
   }
 
   function escapeHtml(s) {
@@ -414,6 +440,7 @@
     $("cardQ").textContent = deck.length ? deck[0].q : "—";
     $("cardA").textContent = deck.length ? deck[0].a : "—";
     $("cardCount").textContent = deck.length ? "1 / " + deck.length + " · 0 dihafal" : "0 kartu";
+    updateCardBar();
     setCardFlipped(false);
   }
 
@@ -436,6 +463,7 @@
 
   function updateCardCount() {
     $("cardCount").textContent = (deckPos + 1) + " / " + deck.length + " · " + matched + " dihafal";
+    updateCardBar();
   }
 
   function rateCard(rate) {
@@ -476,6 +504,46 @@
     updateCardCount();
   }
 
+  function updateCardBar() {
+    const el = $("cardBarFill");
+    if (el) el.style.width = deck.length ? (((deckPos + 1) / deck.length) * 100) + "%" : "0%";
+  }
+
+  /* keyboard: spasi=balik, panah=pindah, 1/2/3=nilai */
+  function initKeyboard() {
+    document.addEventListener("keydown", function (e) {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+      if (!$("settingsModal").hidden) return;
+      if ($("state-dashboard").hidden) return;
+      if (!deck.length) return;
+      if (e.key === " ") { e.preventDefault(); flipCard(); }
+      else if (e.key === "ArrowLeft") goCard(-1);
+      else if (e.key === "ArrowRight") goCard(1);
+      else if (e.key === "1") rateCard(0);
+      else if (e.key === "2") rateCard(1);
+      else if (e.key === "3") rateCard(2);
+    });
+  }
+
+  function flipCard() {
+    if (!deck.length) return;
+    const inner = document.querySelector(".card-inner");
+    if (inner) inner.classList.toggle("flipped");
+  }
+
+  /* Kepadatan ringkasan (lokal, instan) */
+  function initDensity() {
+    document.querySelectorAll("#density .seg-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll("#density .seg-btn").forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        summaryDensity = parseInt(btn.dataset.d, 10) || 8;
+        renderSummary();
+      });
+    });
+  }
+
   function initFlashcardUI() {
     $("cardFlip").addEventListener("click", function () {
       if (!deck.length) return;
@@ -511,8 +579,11 @@
     $("quizScore").textContent = "";
     const c = $("quizContent");
     c.innerHTML = state.quiz.map(function (q, i) {
+      const letters = ["A", "B", "C", "D", "E", "F", "G", "H"];
       const optsHtml = q.options.map(function (o, oi) {
-        return '<button class="quiz-opt" data-q="' + i + '" data-opt="' + oi + '">' + escapeHtml(o.text) + "</button>";
+        return '<button class="quiz-opt" data-q="' + i + '" data-opt="' + oi + '">' +
+          '<span class="opt-let">' + (letters[oi] || (oi + 1)) + "</span>" +
+          '<span class="opt-txt">' + escapeHtml(o.text) + "</span></button>";
       }).join("");
       return '<div class="quiz-question" id="qq' + i + '">' +
         '<div class="quiz-qn"><span class="num">' + (i + 1) + "</span>" +
@@ -658,6 +729,11 @@
     state.summary = [];
     state.cards = [];
     state.quiz = [];
+    summaryRaw = [];
+    summaryDensity = 8;
+    document.querySelectorAll("#density .seg-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.d === "8");
+    });
     chatHistory.length = 0;
     try { localStorage.removeItem(DOC_KEY); } catch (e) {}
     $("pasteArea").value = "";
@@ -670,12 +746,61 @@
     toast("Mulai materi baru.");
   }
 
+  /* ---------- Scroll reveal ---------- */
+  function initReveal() {
+    let seq = 0;
+    document.querySelectorAll(".index-row, .step, .quote, .faq-item").forEach(function (el, i) {
+      el.style.setProperty("--i", (seq++) % 6);
+    });
+    if (!("IntersectionObserver" in window)) {
+      document.querySelectorAll(".rv").forEach(function (el) { el.classList.add("in"); });
+      return;
+    }
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          en.target.classList.add("in");
+          io.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
+  }
+
+  /* ---------- Stat counters ---------- */
+  function initCounters() {
+    document.querySelectorAll(".countup").forEach(function (el) {
+      const to = parseFloat(el.dataset.to || "0");
+      const isInt = Number.isInteger(to);
+      if (!("IntersectionObserver" in window)) { el.textContent = to; return; }
+      const io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          io.unobserve(en.target);
+          const dur = 850, t0 = performance.now();
+          function tick(now) {
+            const p = Math.min(1, (now - t0) / dur);
+            const eased = 1 - Math.pow(1 - p, 3);
+            el.textContent = isInt ? Math.round(to * eased) : (to * eased).toFixed(1);
+            if (p < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+      }, { threshold: 0.6 });
+      io.observe(el);
+    });
+  }
+
   /* ---------- Init ---------- */
   function init() {
     initTheme();
+    initReveal();
+    initCounters();
     initUpload();
     initTabs();
     initFlashcardUI();
+    initDensity();
+    initKeyboard();
 
     document.querySelectorAll("[data-goto]").forEach(function (el) {
       el.addEventListener("click", function (e) {
@@ -711,17 +836,16 @@
     });
 
     $("btnNew").addEventListener("click", resetMaterial);
-    $("btnRegenSummary").addEventListener("click", async function () {
+$("btnRegenSummary").addEventListener("click", async function () {
       showLoading("Membuat ringkasan baru...");
-      try { state.summary = await buildSummary(); renderSummary(); toast("Ringkasan diperbarui", "ok"); }
+      try { state.summary = await buildSummary(); renderSummary(); toast("Ringkasan diperbarui.", "ok"); }
       catch (e) { toast(e.message, "err"); }
       hideLoading();
     });
-    $("btnRegenCards").addEventListener("click", regenCards);
-    $("btnRegenQuiz").addEventListener("click", regenQuiz);
     $("btnCopySummary").addEventListener("click", function () {
-      if (!state.summary.length) return;
-      const txt = state.summary.map(function (s, i) { return (i + 1) + ". " + s; }).join("\n");
+      const list = displaySummary();
+      if (!list.length) return;
+      const txt = list.map(function (s, i) { return (i + 1) + ". " + s; }).join("\n");
       navigator.clipboard.writeText(txt).then(function () { toast("Ringkasan disalin.", "ok"); }).catch(function () { toast("Gagal menyalin.", "err"); });
     });
     $("btnChatSend").addEventListener("click", sendChat);
