@@ -10,6 +10,7 @@
   const STATS_KEY = "belajarkuy_stats";
   const RATINGS_KEY = "belajarkuy_ratings";
   const WEAK_KEY = "belajarkuy_weak";
+  const BANK_KEY = "belajarkuy_bank";
   const state = {
     title: "",
     text: "",
@@ -79,6 +80,269 @@
   function fmtTime(totalSec) {
     const m = Math.floor(totalSec / 60), s2 = totalSec % 60;
     return String(m).padStart(2, "0") + ":" + String(s2).padStart(2, "0");
+  }
+
+  /* ---------- Bank soal pribadi ---------- */
+  let bank = { qs: [] };
+  let bankFilter = "all";
+  let bankSess = null;
+  let bankAnswered = false;
+
+  function loadBank() {
+    try {
+      const b = JSON.parse(localStorage.getItem(BANK_KEY) || "null");
+      if (b && Array.isArray(b.qs)) return { qs: b.qs };
+    } catch (e) {}
+    return { qs: [] };
+  }
+  function saveBank() {
+    try { localStorage.setItem(BANK_KEY, JSON.stringify(bank)); } catch (e) {}
+  }
+  function bankCount() { return bank.qs.length; }
+  function normBankQ(raw, src) {
+    if (!raw || !raw.q || !Array.isArray(raw.options) || raw.options.length < 2) return null;
+    const options = raw.options.map(function (o) { return { text: String(o.text || ""), correct: !!o.correct }; });
+    if (!options.some(function (o) { return o.correct; })) options[0].correct = true;
+    return { q: String(raw.q), options: options, tr: 0, rt: 0, src: src || raw.src || "Manuel" };
+  }
+  function bankAddNormalized(c) {
+    if (!c) return;
+    if (bank.qs.some(function (x) { return x.q === c.q; })) return;
+    bank.qs.push(c);
+    if (bank.qs.length > 600) bank.qs.shift();
+    saveBank();
+  }
+  function bankAddFromQuiz(q) {
+    const c = normBankQ(q, "Dari kuis");
+    if (c) { bankAddNormalized(c); renderBankMeta(); }
+  }
+  function bankQuizFilter() {
+    const qs = bank.qs;
+    if (bankFilter === "weak") {
+      return qs.filter(function (q) { return q.tr > 0 && q.rt / q.tr <= 0.5; });
+    }
+    return qs.slice();
+  }
+  function renderBankOne(q) {
+    const letters = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    const opts = q.options.map(function (o, oi) {
+      return '<button class="quiz-opt" data-opt="' + oi + '">' +
+        '<span class="opt-let">' + (letters[oi] || (oi + 1)) + "</span>" +
+        '<span class="opt-txt">' + escapeHtml(o.text) + "</span></button>";
+    }).join("");
+    $("bankContent").innerHTML =
+      '<div class="quiz-question"><div class="quiz-qn"><span class="num">' + (bankSess.pos + 1) + '</span>' +
+      '<span class="quiz-qt">' + escapeHtml(q.q) + "</span></div>" +
+      '<div class="quiz-opts">' + opts + "</div>" +
+      '<div class="quiz-feedback" id="bf"></div></div>';
+    bankAnswered = false;
+    $("btnBankNext").hidden = true;
+    $("btnBankRestart").hidden = true;
+    renderBankMeta();
+  }
+  function answerBank(oi) {
+    if (!bankSess || bankAnswered) return;
+    if (!bankSess.pool[bankSess.pos]) return;
+    const q = bankSess.pool[bankSess.pos];
+    bankAnswered = true;
+    q.tr++;
+    const correctIdx = q.options.findIndex(function (o) { return o.correct; });
+    const els = document.querySelectorAll("#bankContent .quiz-opt");
+    els.forEach(function (b, bi) {
+      b.disabled = true;
+      if (bi === correctIdx) b.classList.add("correct");
+      else if (bi === oi) b.classList.add("wrong");
+    });
+    const fb = $("bf");
+    if (oi === correctIdx) {
+      q.rt++;
+      bankSess.score++;
+      fb.textContent = "Benar.";
+      fb.className = "quiz-feedback ok";
+    } else {
+      if (bankSess.missed.indexOf(q.q) === -1) bankSess.missed.push(q.q);
+      fb.textContent = "Kurang tepat — jawaban benar ditandai hijau.";
+      fb.className = "quiz-feedback err";
+    }
+    saveBank();
+    $("btnBankNext").hidden = false;
+    renderBankMeta();
+  }
+  function startBank() {
+    const pool = bankQuizFilter();
+    if (!pool.length) {
+      bankSess = null;
+      $("bankContent").innerHTML = '<div class="empty-hint">Tidak ada soal untuk filter ini.</div>';
+      $("btnBankNext").hidden = true;
+      $("btnBankRestart").hidden = true;
+      renderBankMeta();
+      return;
+    }
+    bankSess = { pool: pool, pos: 0, score: 0, missed: [] };
+    renderBankOne(pool[0]);
+  }
+  function finishBank() {
+    const s = bankSess;
+    const total = s.pool.length;
+    let html = '<div class="quiz-question bank-done"><div class="quiz-qn"><span class="num">√</span>' +
+      '<span class="quiz-qt">Latihan selesai</span></div><div class="quiz-feedback ok">Skor: ' + s.score +
+      " / " + total + "</div>";
+    if (s.missed.length) {
+      html += '<p class="muted" style="margin-top:14px">Masih salah ' + s.missed.length + ' soal. Latih lagi yang ini biar tuntas:</p><ul class="chip-list">' +
+        s.missed.slice(0, 6).map(function (m) { return "<li>" + escapeHtml(m) + "</li>"; }).join("") +
+        "</ul>";
+    }
+    html += "</div>";
+    $("bankContent").innerHTML = html;
+    $("btnBankNext").hidden = true;
+    $("btnBankRestart").hidden = false;
+    renderBankMeta();
+  }
+  function renderBankMeta() {
+    $("bankCount").textContent = bankCount() + " soal";
+    $("bankEmpty").hidden = bankCount() > 0;
+    $("bankWrap").hidden = bankCount() === 0;
+    if (bankSess) {
+      $("bankProg").textContent = "pos " + (bankSess.pos + 1) + " / " + bankSess.pool.length;
+      $("bankScore").textContent = "Skor " + bankSess.score;
+    } else {
+      $("bankProg").textContent = "pos —";
+      $("bankScore").textContent = "Skor —";
+    }
+  }
+
+  /* impor/ekspor bank */
+  function parseCSV(text) {
+    const out = [];
+    let cells = [], c = "", q = false;
+    function pushCell() { cells.push(c); c = ""; }
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { c += '"'; i++; } else q = false; }
+        else c += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ",") pushCell();
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        pushCell(); out.push(cells.splice(0));
+      } else c += ch;
+    }
+    if (c.length || cells.length) { pushCell(); out.push(cells.splice(0)); }
+    return out.filter(function (r) { return r.some(function (x) { return String(x).trim(); }); });
+  }
+  function importBankCSV(text) {
+    const rows = parseCSV(text);
+    let added = 0, cur = null;
+    rows.forEach(function (row, ri) {
+      if (ri === 0 && /^type$/i.test(String(row[0]).trim())) return;
+      const type = String(row[0] || "").trim();
+      const title = String(row[1] || "").trim();
+      if (title && /multiple_choice/i.test(type)) {
+        cur = normBankQ({ q: title, options: row.slice(2, 6).filter(function (x) { return String(x).trim(); }).map(function (t) { return { text: String(t), correct: false }; }) }, "Impor CSV");
+        if (cur) { bankAddNormalized(cur); added++; }
+      } else if (!title && /MULTIPLE_CHOICE/i.test(type) && cur) {
+        for (let k = 0; k < 4; k++) {
+          const v = row[2 + k];
+          if (v && String(v).trim() && cur.options[k]) cur.options[k].correct = true;
+        }
+      }
+    });
+    return added;
+  }
+  function importBankJSON(text) {
+    const d = JSON.parse(text);
+    const arr = Array.isArray(d) ? d : (Array.isArray(d.qs) ? d.qs : (Array.isArray(d.quiz) ? d.quiz : null));
+    if (!arr) throw new Error("format JSON tidak dikenali.");
+    let added = 0;
+    arr.forEach(function (raw) {
+      const c = normBankQ(raw, "Impor");
+      if (c) { bankAddNormalized(c); added++; }
+    });
+    return added;
+  }
+  function exportBank(kind) {
+    if (!bank.qs.length) { toast("Bank kosong.", "err"); return; }
+    if (kind === "json") {
+      download("belajarkuy-bank.json", JSON.stringify({ app: "belajarkuy", kind: "bank", v: 2, qs: bank.qs }, null, 2), "application/json");
+    } else {
+      const rows = [["Type", "Title", "Option 1", "Option 2", "Option 3", "Option 4"].join(",")];
+      bank.qs.forEach(function (q) {
+        const opts = q.options.map(function (o) { return o.text; });
+        rows.push(["MULTIPLE_CHOICE", q.q].concat(opts.slice(0, 4)).map(csvCell).join(","));
+        const cIdx = q.options.findIndex(function (o) { return o.correct; });
+        if (cIdx >= 0 && cIdx < 4) {
+          const mark = ["MULTIPLE_CHOICE", "", "", "", "", ""];
+          mark[2 + cIdx] = opts[cIdx];
+          rows.push(mark.map(csvCell).join(","));
+        }
+      });
+      download("belajarkuy-bank.csv", "\uFEFF" + rows.join("\r\n"), "text/csv");
+    }
+    toast("Bank diunduh.", "ok");
+  }
+  function initBank() {
+    document.querySelectorAll("#bankFilter .seg-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll("#bankFilter .seg-btn").forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        bankFilter = btn.dataset.f || "all";
+        startBank();
+      });
+    });
+    $("bankContent").addEventListener("click", function (e) {
+      const b = e.target.closest(".quiz-opt");
+      if (!b) return;
+      answerBank(parseInt(b.dataset.opt, 10));
+    });
+    $("btnBankNext").addEventListener("click", function () {
+      if (!bankSess) return;
+      bankSess.pos++;
+      if (bankSess.pos < bankSess.pool.length) renderBankOne(bankSess.pool[bankSess.pos]);
+      else finishBank();
+    });
+    $("btnBankRestart").addEventListener("click", startBank);
+    $("btnBankClear").addEventListener("click", function () {
+      if (!bank.qs.length) return;
+      const ok = typeof confirm === "undefined" ? true : confirm("Hapus semua soal di bank?");
+      if (ok) {
+        bank.qs = [];
+        saveBank();
+        startBank();
+        toast("Bank dikosongkan.", "ok");
+      }
+    });
+    $("btnBankImport").addEventListener("click", function () { $("bankImportInput").click(); });
+    $("bankImportInput").addEventListener("change", function () {
+      const f = this.files && this.files[0];
+      this.value = "";
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = function () {
+        try {
+          const isCsv = /\.csv$/i.test(f.name);
+          const added = isCsv ? importBankCSV(r.result) : importBankJSON(r.result);
+          saveBank();
+          startBank();
+          toast(added ? added + " soal ditambahkan ke bank." : "Tidak ada soal baru (mungkin duplikat).", "ok");
+        } catch (e) {
+          toast("Impor bank gagal: " + e.message, "err");
+        }
+      };
+      r.readAsText(f);
+    });
+    $("btnBankExport").addEventListener("click", function (e) {
+      e.stopPropagation();
+      const m = $("bankMenu");
+      m.hidden = !m.hidden;
+    });
+    $("bankMenu").addEventListener("click", function (e) {
+      e.stopPropagation();
+      const b = e.target.closest(".menu-item");
+      if (!b) return;
+      exportBank(b.dataset.bexp);
+      $("bankMenu").hidden = true;
+    });
   }
 
   /* ---------- Toast & loading ---------- */
@@ -460,6 +724,7 @@
     updateModeBadge();
     renderDashStats();
     renderWeak();
+    renderBankMeta();
 
     renderSummary();
     if (state.cards.length) {
@@ -701,6 +966,7 @@
         feedback.textContent = picked === -1 ? "Tidak dijawab — jawaban benar ditandai hijau." : "Kurang tepat — jawaban benar ditandai hijau.";
         feedback.className = "quiz-feedback err";
         wrong.push(q.q);
+        bankAddFromQuiz(q);
       }
     });
     $("quizScore").textContent = "Skor: " + score + " / " + state.quiz.length;
@@ -1129,6 +1395,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
 
   /* ---------- Init ---------- */
   function init() {
+    bank = loadBank();
     initTheme();
     initReveal();
     initCounters();
@@ -1143,6 +1410,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
     initPomodoro();
     initPrint();
     initAsk();
+    initBank();
     initPWA();
 
     document.querySelectorAll("[data-goto]").forEach(function (el) {

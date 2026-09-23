@@ -1,5 +1,5 @@
 /* BelajarKuy service worker — offline shell + cache-first untuk aset lokal */
-const CACHE = "belajarkuy-v1";
+const CACHE = "belajarkuy-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -72,17 +72,17 @@ self.addEventListener("fetch", function (e) {
     return;
   }
 
-  /* aset lokal: cache-first */
+  /* aset lokal: stale-while-revalidate (tampilkan cache, perbarui diam-diam) */
   e.respondWith(
     caches.match(req).then(function (cached) {
-      if (cached) return cached;
-      return fetch(req).then(function (resp) {
+      const fetchP = fetch(req).then(function (resp) {
         if (resp && resp.ok) {
           const copy = resp.clone();
           caches.open(CACHE).then(function (c) { c.put(req, copy); });
         }
         return resp;
-      });
+      }).catch(function () { return cached; });
+      return cached || fetchP;
     })
   );
 });

@@ -473,6 +473,7 @@ select.input { appearance: auto; }
 @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.panel-actions { position: relative; }
 .panel-head h3 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 900; letter-spacing: -.01em; }
 .panel-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
@@ -848,4 +849,18 @@ kbd {
   .pc-q p { flex: 1; margin: 0; }
   .pc-no { font-family: "Courier New", monospace; font-size: 11px; line-height: 22px; color: #888; }
   .pc-a { font-size: 13px; color: #333; border-top: 1px dotted #ccc; margin-top: 10px; padding-top: 10px; font-family: Georgia, serif; }
+}
+
+/* ===========================================================
+   BANK SOAL
+   =========================================================== */
+.bank-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.bank-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.bank-done .quiz-qt { font-size: 1.3rem; }
+.bank-done .quiz-feedback.ok { font-size: 1.05rem; font-weight: 700; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 16px 0 0; margin: 0; }
+.chip-list li {
+  font-family: var(--font-mono); font-size: .72rem; color: var(--ink);
+  border: 1px solid var(--line-strong); background: var(--paper-2);
+  padding: 6px 11px; border-radius: 6px;
 }

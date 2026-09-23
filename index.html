@@ -389,6 +389,7 @@
       <button class="tab active" data-tab="summary">Ringkasan</button>
       <button class="tab" data-tab="flashcards">Flashcard</button>
       <button class="tab" data-tab="quiz">Kuis</button>
+      <button class="tab" data-tab="bank">Bank</button>
       <button class="tab" data-tab="chat">AI Tutor</button>
     </div>
 
@@ -473,6 +474,45 @@
           </div>
         </div>
         <div id="quizContent" class="quiz-content"></div>
+      </div>
+
+      <!-- BANK SOAL -->
+      <div class="panel" id="panel-bank">
+        <div class="panel-head">
+          <div>
+            <h3>Bank Soal</h3>
+            <p class="muted">Soal yang kamu jawab salah di kuis otomatis masuk ke sini. Impor soalmu sendiri untuk drill lintas materi.</p>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-line btn-sm" id="btnBankImport" title="Impor soal dari file .json / .csv">Impor soal ⤒</button>
+            <input type="file" id="bankImportInput" accept=".json,.csv,text/csv,application/json" hidden />
+            <button class="btn btn-line btn-sm" id="btnBankExport" title="Unduh isi bank">Unduh bank ▾</button>
+            <div class="menu" id="bankMenu" hidden>
+              <button class="menu-item" data-bexp="json">Bank (.json)</button>
+              <button class="menu-item" data-bexp="csv">Bank (.csv · format Forms)</button>
+            </div>
+            <button class="btn btn-line btn-sm" id="btnBankClear" title="Hapus semua soal di bank">Kosongkan</button>
+          </div>
+        </div>
+        <div id="bankEmpty" class="empty-hint">Bank masih kosong. Jawab salah di kuis dan soalnya otomatis tersimpan di sini, atau impor bank soalnya sendiri.</div>
+        <div id="bankWrap">
+          <div class="bank-top">
+            <div class="seg" id="bankFilter">
+              <button class="seg-btn active" data-f="all">Semua soal</button>
+              <button class="seg-btn" data-f="weak">Yang sering salah</button>
+            </div>
+            <div class="bank-meta">
+              <span class="stat-chip" id="bankCount">0 soal</span>
+              <span class="stat-chip" id="bankProg">pos —</span>
+              <span class="stat-chip" id="bankScore">Skor —</span>
+            </div>
+          </div>
+          <div id="bankContent" class="quiz-content"></div>
+          <div class="quiz-actions">
+            <button class="btn btn-solid" id="btnBankNext" hidden>Soal berikutnya →</button>
+            <button class="btn btn-line" id="btnBankRestart" hidden>Ulang latihan</button>
+          </div>
+        </div>
       </div>
 
       <!-- CHAT -->
